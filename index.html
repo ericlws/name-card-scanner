@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>名片掃描器 (支持繁體中文)</title>
+    <title>增強型名片掃描器 (支持繁體中文)</title>
     <script src='https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js'></script>
     <style>
         body {
@@ -33,10 +33,22 @@
             display: none;
             margin-top: 20px;
         }
+        #image-adjustments {
+            margin-top: 20px;
+        }
+        #image-adjustments label {
+            display: inline-block;
+            width: 80px;
+            text-align: right;
+            margin-right: 10px;
+        }
+        #image-adjustments input {
+            width: 200px;
+        }
     </style>
 </head>
 <body>
-    <h1>名片掃描器 (支持繁體中文)</h1>
+    <h1>增強型名片掃描器 (支持繁體中文)</h1>
     <div id="upload-container">
         <p>上傳名片圖片：</p>
         <input type="file" id="file-input" accept="image/*">
@@ -44,6 +56,15 @@
     <div id="preview-container">
         <h2>預覽：</h2>
         <img id="preview" src="" alt="名片預覽">
+    </div>
+    <div id="image-adjustments">
+        <label for="brightness">亮度：</label>
+        <input type="range" id="brightness" min="-100" max="100" value="0">
+        <br>
+        <label for="contrast">對比度：</label>
+        <input type="range" id="contrast" min="-100" max="100" value="0">
+        <br>
+        <button id="apply-adjustments">套用調整</button>
     </div>
     <div id="loading">正在處理圖片... 請稍候。</div>
     <div id="result-container">
@@ -56,6 +77,9 @@
         const preview = document.getElementById('preview');
         const result = document.getElementById('result');
         const loading = document.getElementById('loading');
+        const brightnessSlider = document.getElementById('brightness');
+        const contrastSlider = document.getElementById('contrast');
+        const applyButton = document.getElementById('apply-adjustments');
 
         fileInput.addEventListener('change', function(e) {
             const file = e.target.files[0];
@@ -69,11 +93,73 @@
             }
         });
 
-        function performOCR(imageData) {
+        applyButton.addEventListener('click', () => {
+            const brightness = brightnessSlider.value;
+            const contrast = contrastSlider.value;
+            applyImageAdjustments(brightness, contrast);
+        });
+
+        function applyImageAdjustments(brightness, contrast) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = preview.width;
+            canvas.height = preview.height;
+            
+            ctx.drawImage(preview, 0, 0, canvas.width, canvas.height);
+            
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            
+            for (let i = 0; i < data.length; i += 4) {
+                data[i] += parseInt(brightness);     // red
+                data[i + 1] += parseInt(brightness); // green
+                data[i + 2] += parseInt(brightness); // blue
+                
+                const factor = (259 * (parseInt(contrast) + 255)) / (255 * (259 - parseInt(contrast)));
+                data[i] = factor * (data[i] - 128) + 128;
+                data[i + 1] = factor * (data[i + 1] - 128) + 128;
+                data[i + 2] = factor * (data[i + 2] - 128) + 128;
+            }
+            
+            ctx.putImageData(imageData, 0, 0);
+            preview.src = canvas.toDataURL();
+        }
+
+        function preprocessImage(imageData) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    
+                    ctx.drawImage(img, 0, 0, img.width, img.height);
+                    
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const data = imageData.data;
+                    
+                    for (let i = 0; i < data.length; i += 4) {
+                        const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                        const newValue = avg > 128 ? 255 : 0; // Increase contrast
+                        data[i] = data[i + 1] = data[i + 2] = newValue;
+                    }
+                    
+                    ctx.putImageData(imageData, 0, 0);
+                    
+                    resolve(canvas.toDataURL());
+                };
+                img.src = imageData;
+            });
+        }
+
+        async function performOCR(imageData) {
             loading.style.display = 'block';
             result.textContent = '';
 
-            Tesseract.recognize(imageData, 'chi_tra', { 
+            const processedImageData = await preprocessImage(imageData);
+
+            Tesseract.recognize(processedImageData, 'chi_tra', { 
                 logger: m => console.log(m),
                 langPath: 'https://raw.githubusercontent.com/naptha/tessdata/gh-pages/4.0.0'
             })
