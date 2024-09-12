@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>名片掃描器 (支持繁體中文)</title>
+    <script src='https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js'></script>
+    <style>
+        body {
+            font-family: "Microsoft JhengHei", Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        #upload-container {
+            border: 2px dashed #ccc;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        #preview {
+            max-width: 100%;
+            margin-top: 20px;
+        }
+        #result {
+            text-align: left;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-top: 20px;
+            white-space: pre-wrap;
+        }
+        #loading {
+            display: none;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>名片掃描器 (支持繁體中文)</h1>
+    <div id="upload-container">
+        <p>上傳名片圖片：</p>
+        <input type="file" id="file-input" accept="image/*">
+    </div>
+    <div id="preview-container">
+        <h2>預覽：</h2>
+        <img id="preview" src="" alt="名片預覽">
+    </div>
+    <div id="loading">正在處理圖片... 請稍候。</div>
+    <div id="result-container">
+        <h2>提取的文字：</h2>
+        <pre id="result"></pre>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('file-input');
+        const preview = document.getElementById('preview');
+        const result = document.getElementById('result');
+        const loading = document.getElementById('loading');
+
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    preview.src = event.target.result;
+                    performOCR(event.target.result);
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        function performOCR(imageData) {
+            loading.style.display = 'block';
+            result.textContent = '';
+
+            Tesseract.recognize(imageData, 'chi_tra', { 
+                logger: m => console.log(m),
+                // Load Traditional Chinese language data
+                langPath: 'https://raw.githubusercontent.com/naptha/tessdata/gh-pages/4.0.0'
+            })
+            .then(({ data: { text } }) => {
+                loading.style.display = 'none';
+                result.textContent = text;
+            })
+            .catch(error => {
+                loading.style.display = 'none';
+                result.textContent = '錯誤：' + error.message;
+            });
+        }
+    </script>
+</body>
+</html>
